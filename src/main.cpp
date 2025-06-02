@@ -1,6 +1,7 @@
 #include "utilities.h"
 #include "gpsUtils.h"
 #include "Gpsmodule.h"
+#include <Arduino.h>
 
 #define ENABLE_USER_CONFIG
 #define ENABLE_USER_AUTH
@@ -13,11 +14,12 @@
 String Truck_ID  = "truck_12345";
 float speedLimit = 70;
 bool globOverSpeed = false;
+bool active = false;
+bool activeSet = false;
 
-const unsigned long DB_UPDATE_INTERVAL   = 45UL * 1000;  // 45 seconds
-const unsigned long OVERSPEED_CHECK_INTERVAL = 400;      // 0.8 seconds
-
-const unsigned long OVERSPEED_UPDATE_INTERVAL = 1000; // 1 second
+const unsigned long DB_UPDATE_INTERVAL   = 45UL * 1000;  
+const unsigned long OVERSPEED_CHECK_INTERVAL = 400;     
+const unsigned long OVERSPEED_UPDATE_INTERVAL = 1000; 
 
 unsigned long  lastDbUpdate   = 0;
 unsigned long  lastOverspeedCheck = 0;
@@ -25,11 +27,9 @@ unsigned long  lastOverspeedUpdate = 0;
 
 const String path = "/Trucks/" + Truck_ID +"/data/";
 const String activePath = path + "active";
-// Set serial for debug console (to the Serial Monitor, default speed 115200)
+
 #define SerialMon Serial
 
-// Set serial for AT commands (to the module)
-// Use Hardware Serial on Mega, Leonardo, Micro
 #define SerialAT Serial1
 
 // set GSM PIN, if any
@@ -42,12 +42,9 @@ const char gprsPass[] = "";
 
 #define UART_BAUD 115200
 
-#include <Arduino.h>
-// Include TinyGsmClient.h first and followed by FirebaseClient.h
 #include <TinyGsmClient.h>
 #include <FirebaseClient.h>
-#include "ExampleFunctions.h" // Provides the functions used in the examples.
-
+#include "ExampleFunctions.h"
 
 #define API_KEY "AIzaSyDWV7_xKJ9vRvtBceQdTb5akTSx3jKk1Bw"
 #define USER_EMAIL "truck123@gmail.com"
@@ -76,6 +73,7 @@ AsyncResult streamResult;
 void maybeSendPeriodicData();
 void checkAndAlertOverspeed();
 void updateRealtimeDB(bool overSpeed);
+void get_active_data(AsyncResult &aResult);
 void processData(AsyncResult &aResult);
 
 void setup(){
@@ -109,12 +107,6 @@ void setup(){
 	gps.begin();
 
 	SerialAT.begin(UART_BAUD, SERIAL_8N1, MODEM_RX_PIN, MODEM_TX_PIN);
-
-	// if (!modem.init())
-	// {
-	//     DBG("Failed to restart modem, delaying 10s and retrying");
-	//     return;
-	// }
 
 	int retry = 0;
 	while (!modem.testAT(1000)) {
@@ -182,12 +174,12 @@ if (!modem.isGprsConnected()) {
 
 	ssl_client.setInsecure();
 	ssl_client.setDebugLevel(1);
-	ssl_client.setBufferSizes(4096 /* rx */, 2048 /* tx */);
+	ssl_client.setBufferSizes(4096, 2048);
 	ssl_client.setClient(&gsm_client);
 
 	stream_ssl_client.setInsecure();
 	stream_ssl_client.setDebugLevel(1);
-	stream_ssl_client.setBufferSizes(4096 /* rx */, 2048 /* tx */);
+	stream_ssl_client.setBufferSizes(4096 , 2048 );
 	stream_ssl_client.setClient(&stream_gsm_client);
 
 	Serial.println("Initializing app...");
@@ -199,9 +191,11 @@ if (!modem.isGprsConnected()) {
 
 	streamClient.setSSEFilters("get,put,patch,keep-alive,cancel,auth_revoked");
 
-	Database.get(streamClient, "/examples/Stream/data", processData, true /* SSE mode */, "streamTask");
+	Database.get(streamClient, activePath, get_active_data, true /* SSE mode */, "streamTask");
 
 }
+
+unsigned long ms = 0;
 
 void loop(){
 
@@ -211,24 +205,26 @@ void loop(){
 
   Database.loop();
 
-	maybeSendPeriodicData();
-	checkAndAlertOverspeed();
+	if(activeSet && active){
+		maybeSendPeriodicData();
+		checkAndAlertOverspeed();
+	}
 
   delay(50);
 }
 
 void maybeSendPeriodicData() {
   if (!app.ready()) return;
-
+  
   unsigned long now = millis();
   if (now - lastDbUpdate < DB_UPDATE_INTERVAL) return;
   lastDbUpdate = now;
-  
+//   Serial.println("get data.");
+//   get_active_data();
   if (!gps.locationValid() || !gps.locationUpdated()) {
     Serial.println("Periodic update: no valid GPS fix.");
     return;
   }
-
   bool overSpeed = gps.speed() > speedLimit;
   GPSStringData d = gps.getStringData();
 
@@ -242,7 +238,7 @@ void maybeSendPeriodicData() {
 	updateRealtimeDB(overSpeed);
 }
 
-void checkAndAlertOverspeed() {
+void checkAndAlertOverspeed(){
   unsigned long now = millis();
   if (now - lastOverspeedCheck < OVERSPEED_CHECK_INTERVAL) return;
   lastOverspeedCheck = now;
@@ -268,7 +264,6 @@ void checkAndAlertOverspeed() {
 	}
 };
 
-
 void updateRealtimeDB(bool overSpeedState) {
   GPSStringData d = gps.getStringData();  // get latest lat/lon/time/date as strings
 
@@ -291,12 +286,65 @@ void updateRealtimeDB(bool overSpeedState) {
   );
 }
 
-void get_active_data(){
-	bool value2 = Database.get<bool>(aClient, activePath);
+void get_active_data(AsyncResult &aResult){
+	if (!aResult.isResult())
+		return;
+
+	if (aResult.isEvent()){
+		Firebase.printf("Event task: %s, msg: %s, code: %d\n", aResult.uid().c_str(), aResult.eventLog().message().c_str(), aResult.eventLog().code());
+	}
+
+	if (aResult.isDebug()){
+		Firebase.printf("Debug task: %s, msg: %s\n", aResult.uid().c_str(), aResult.debug().c_str());
+	}
+
+	if (aResult.isError()){
+		Firebase.printf("Error task: %s, msg: %s, code: %d\n", aResult.uid().c_str(), aResult.error().message().c_str(), aResult.error().code());
+		return;
+	}
+
+	if (aResult.available()){
+		RealtimeDatabaseResult &RTDB = aResult.to<RealtimeDatabaseResult>();
+		if (RTDB.isStream()){
+
+			Serial.println("----------------------------");
+			Firebase.printf("task: %s\n", aResult.uid().c_str());
+			Firebase.printf("event: %s\n", RTDB.event().c_str());
+			Firebase.printf("path: %s\n", RTDB.dataPath().c_str());
+			Firebase.printf("data: %s\n", RTDB.to<const char *>());
+			Firebase.printf("type: %d\n", RTDB.type());
+
+			String eventType = RTDB.event();      // “put”, “patch”, “keep-alive”, etc.
+			String dataPath  = RTDB.dataPath();   // e.g. “/” or “/someChild”
+			String payload   = RTDB.to<String>(); // e.g. "true", "false", or “null”
+
+			if (!activeSet && eventType == "put" && dataPath == "/") {
+    // The payload is the entire node’s value (a JSON primitive true/false)
+				active = (payload == "true");
+				activeSet = true;
+				Serial.printf("[SSE] Initial flag = %s\n", active ? "true" : "false");
+				return;
+			}
+
+			if (activeSet && (eventType == "put" || eventType == "patch") && dataPath == "/") {
+				bool newVal = (payload == "true");
+				if (newVal != active) {
+					active = newVal;
+					Serial.printf("[SSE] Updated flag = %s\n", active ? "true" : "false");
+				}
+				return;
+			}
+		}
+		else{
+			Serial.println("----------------------------");
+			Firebase.printf("task: %s, payload: %s\n", aResult.uid().c_str(), aResult.c_str());
+		}
+
+		Firebase.printf("Free Heap: %d\n", ESP.getFreeHeap());
+	}
 }
 
 void processData(AsyncResult &aResult){
-	// Exits when no result available when calling from the loop.
 	if (!aResult.isResult())
 			return;
 
