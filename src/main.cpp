@@ -219,15 +219,13 @@ void SendPeriodicData() {
   if (!gps.locationValid() || !gps.locationUpdated()) {
     Serial.println("Periodic update: no valid GPS fix.");
 		gpsFixStatus = false;
-		delay(20);
-		update_GPS_Fix(gpsFixStatus);
+		update_GPS_Fix(false);
 		return;
   }
-	
+
 	if(!gpsFixStatus){
 		gpsFixStatus = true;
-		delay(20);
-		update_GPS_Fix(gpsFixStatus);
+		update_GPS_Fix(true);
 	}
   bool overSpeed = gps.speed() > speedLimit;
   GPSStringData d = gps.getStringData();
