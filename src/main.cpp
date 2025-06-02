@@ -72,7 +72,7 @@ void checkAndAlertOverspeed();
 void updateRealtimeDB(bool overSpeed);
 void get_active_data(AsyncResult &aResult);
 void processData(AsyncResult &aResult);
-void update_GPS_Fix();
+void update_GPS_Fix(bool status);
 
 void setup(){
 	Serial.begin(115200);
