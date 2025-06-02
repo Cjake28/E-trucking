@@ -92,12 +92,12 @@ GPSStringData GPSModule::getStringData(int utcOffsetHours) {
 
     if (hour >= 24) {
       hour -= 24;
-      day += 1; // crude, no month rollover
+      day += 1;
     }
 
     data.year = String(d.year());
     data.month = String(d.month());
-    data.day = String(day);  // possibly incremented
+    data.day = String(day);
     data.hour = String(hour);
     data.minute = String(t.minute());
     data.second = String(t.second());

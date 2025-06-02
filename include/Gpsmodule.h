@@ -42,10 +42,8 @@ public:
   uint32_t satellites();
   float   speed();
 
-  // Return raw numeric data
   GPSData getData(int utcOffsetHours = 8);
 
-  // Return all values as strings in an object
   GPSStringData getStringData(int utcOffsetHours = 8);
 
 private:
@@ -56,4 +54,4 @@ private:
   TinyGPSPlus gps;
 };
 
-#endif // GPSMODULE_H
+#endif 
