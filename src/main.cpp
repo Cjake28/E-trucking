@@ -16,6 +16,7 @@ float speedLimit = 70;
 bool globOverSpeed = false;
 bool active = false;
 bool activeSet = false;
+bool gpsFixStatus = false;
 
 const unsigned long DB_UPDATE_INTERVAL   = 45UL * 1000;  
 const unsigned long OVERSPEED_CHECK_INTERVAL = 400;     
@@ -29,13 +30,9 @@ const String path = "/Trucks/" + Truck_ID +"/data/";
 const String activePath = path + "active";
 
 #define SerialMon Serial
-
 #define SerialAT Serial1
 
-// set GSM PIN, if any
 #define GSM_PIN ""
-
-// Your GPRS credentials, if any
 const char apn[] = "internet";
 const char gprsUser[] = "";
 const char gprsPass[] = "";
@@ -51,7 +48,7 @@ const char gprsPass[] = "";
 #define USER_PASSWORD "123456"
 #define DATABASE_URL "https://e-trucking-8d905-default-rtdb.asia-southeast1.firebasedatabase.app"
 
-	GPSModule gps(Serial2, GPS_RX_PIN, GPS_TX_PIN, GPS_BAUDRATE);
+GPSModule gps(Serial2, GPS_RX_PIN, GPS_TX_PIN, GPS_BAUDRATE);
 
 TinyGsm modem(SerialAT);
 
@@ -70,11 +67,12 @@ FirebaseApp app;
 RealtimeDatabase Database;
 AsyncResult streamResult;
 
-void maybeSendPeriodicData();
+void SendPeriodicData();
 void checkAndAlertOverspeed();
 void updateRealtimeDB(bool overSpeed);
 void get_active_data(AsyncResult &aResult);
 void processData(AsyncResult &aResult);
+void update_GPS_Fix();
 
 void setup(){
 	Serial.begin(115200);
@@ -100,9 +98,8 @@ void setup(){
 	delay(100);
 	digitalWrite(BOARD_PWRKEY_PIN, LOW);
 
-	// Check if the modem is online
 	Serial.println("Start modem...");
-	delay(3000);
+	delay(2000);
 
 	gps.begin();
 
@@ -122,7 +119,6 @@ void setup(){
 	}
 	Serial.println();
 
-			// Check if SIM card is online
 	SimStatus sim = SIM_ERROR;
 	while (sim != SIM_READY) {
 		sim = modem.getSimStatus();
@@ -206,25 +202,33 @@ void loop(){
   Database.loop();
 
 	if(activeSet && active){
-		maybeSendPeriodicData();
+		SendPeriodicData();
 		checkAndAlertOverspeed();
 	}
 
   delay(50);
 }
 
-void maybeSendPeriodicData() {
+void SendPeriodicData() {
   if (!app.ready()) return;
   
   unsigned long now = millis();
   if (now - lastDbUpdate < DB_UPDATE_INTERVAL) return;
   lastDbUpdate = now;
-//   Serial.println("get data.");
-//   get_active_data();
+
   if (!gps.locationValid() || !gps.locationUpdated()) {
     Serial.println("Periodic update: no valid GPS fix.");
-    return;
+		gpsFixStatus = false;
+		delay(20);
+		update_GPS_Fix(gpsFixStatus);
+		return;
   }
+	
+	if(!gpsFixStatus){
+		gpsFixStatus = true;
+		delay(20);
+		update_GPS_Fix(gpsFixStatus);
+	}
   bool overSpeed = gps.speed() > speedLimit;
   GPSStringData d = gps.getStringData();
 
@@ -265,9 +269,8 @@ void checkAndAlertOverspeed(){
 };
 
 void updateRealtimeDB(bool overSpeedState) {
-  GPSStringData d = gps.getStringData();  // get latest lat/lon/time/date as strings
+  GPSStringData d = gps.getStringData();  
 
-  // Build a small JSON payload
   JsonWriter writer;
   object_t json, o1, o2, o3, o4;
   writer.create(o1, "lat",       d.latitude);
@@ -276,14 +279,27 @@ void updateRealtimeDB(bool overSpeedState) {
   writer.create(o4, "overSpeed", overSpeedState);
   writer.join(json, 4, o1, o2, o3, o4);
 
-  // Push your update. The last string (“overspeedTask” or “stopOverspeedTask”) is a unique UID
   Database.update<object_t>(
     aClient,
     path,
     json,
     processData,
-    "setTask"
+    "updateTask"
   );
+}
+
+void update_GPS_Fix(bool status){
+	JsonWriter writer;
+	object_t json, o1;
+	writer.create(o1, "gpsFix", status);
+	writer.join(json, 1, o1);
+	Database.update<object_t>(
+		aClient,
+		path,
+		json,
+		processData,
+		"updateGPSFixTask"
+	);
 }
 
 void get_active_data(AsyncResult &aResult){
