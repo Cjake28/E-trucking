@@ -34,7 +34,7 @@
 
 <!-- | [T-Call-A7670X-V1.1][3] | ESP32-WROVER-E   | 4MB      | 8MB(QSPI) | [schematic](./schematic/T-Call-A7670-V1.1.pdf)                                               | -->
 <!-- | [T-A7608-DC-S3][5]      | ESP32-S3-WROOM-1 | 16MB     | 8MB(OPI)  | [schematic](./schematic/T-A7608X-DC-S3-V1.0.pdf)                                             | -->
-
+<!-- 
 [1]: https://www.lilygo.cc/products/t-sim-a7670eZ
 [2]: https://www.lilygo.cc/products/t-call-v1-4
 [3]: https://lilygo.cc/products/t-a7608e-h?variant=42860532433077
@@ -276,7 +276,7 @@
    - [T-A7608X DWG](./dimensions/T-A7608X-V1.0.dwg)
    - [T-A7670X DWG](./dimensions/T-A7670X-V1.1.dwg)
    - [T-Call-A7670 DWG](./dimensions/T-Call-A7670-V1.0.dwg)
-   - [T-SIM7672-S3 DWG](./dimensions/T-SIM7670G-S3-V1.0.dwg)
+   - [T-SIM7672-S3 DWG](./dimensions/T-SIM7670G-S3-V1.0.dwg) -->
 
 
 
