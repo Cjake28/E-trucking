@@ -1,4 +1,4 @@
-<h1 align = "center">🌟LilyGO T-A76XX🌟</h1>
+<!-- <h1 align = "center">🌟LilyGO T-A76XX🌟</h1>
 
 [![PlatformIO CI](https://github.com/Xinyuan-LilyGO/LilyGO-T-A76XX/actions/workflows/platformio.yml/badge.svg)](https://github.com/Xinyuan-LilyGO/LilyGO-T-A76XX/actions/workflows/platformio.yml)
 
@@ -283,4 +283,4 @@
 
 
 
-
+ -->
